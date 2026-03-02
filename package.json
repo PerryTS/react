@@ -1,0 +1,12 @@
+{
+  "name": "perry-react",
+  "version": "0.1.0",
+  "description": "React-compatible renderer for Perry native desktop apps",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "keywords": ["perry", "react", "native", "desktop"],
+  "license": "MIT",
+  "perry": {
+    "nativeModule": true
+  }
+}

@@ -1,0 +1,5 @@
+node_modules/
+demo/main
+demo/*.o
+*.o
+.DS_Store
