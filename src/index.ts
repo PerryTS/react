@@ -59,6 +59,7 @@ let _idx = 0                   // current hook index during a render pass
 // Re-render machinery
 let _rootWidget: any = null    // Perry VStack that holds the whole component tree
 let _renderFn: any = null      // () => ReactElement — the root component lambda
+let _isBuilding = false         // guard against reentrant renders (e.g. Toggle fires onChange during construction)
 
 // ─── Internal helpers ────────────────────────────────────────────────────────
 
@@ -69,6 +70,8 @@ let _renderFn: any = null      // () => ReactElement — the root component lamb
  */
 function _scheduleRerender(): void {
   if (_rootWidget === null || _renderFn === null) { return }
+  if (_isBuilding) { return }
+  _isBuilding = true
   widgetClearChildren(_rootWidget)
   _idx = 0
   const rootEl = _renderFn()
@@ -76,6 +79,7 @@ function _scheduleRerender(): void {
   if (w !== null) {
     widgetAddChild(_rootWidget, w)
   }
+  _isBuilding = false
 }
 
 function _buildWidget(element: any): any {
@@ -591,11 +595,13 @@ export function createRoot(_container: any, options: RootOptions): Root {
       _renderFn = () => elemAny
 
       // Initial render pass
+      _isBuilding = true
       _idx = 0
       const w = _buildWidget(elemAny)
       if (w !== null) {
         widgetAddChild(rootWidget, w)
       }
+      _isBuilding = false
 
       // Start Perry's native event loop.  This call blocks until the window
       // is closed.  All subsequent re-renders happen synchronously inside the
