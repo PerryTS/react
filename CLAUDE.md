@@ -12,9 +12,14 @@ perry-react/
                           element→widget mapping, createRoot
   demo/
     src/main.tsx        — entry point: createRoot + root.render(<App />)
-    src/App.tsx         — counter + text-input demo component
+    src/App.tsx         — WorkBench demo component (14 test sections)
     package.json        — packageAliases wiring
     main                — compiled binary (gitignored)
+    kanban-board.jsx    — web-first kanban demo (NOT compilable with Perry)
+    kanban/             — native-adapted kanban board demo
+      src/main.tsx      — entry point (1400×800 window)
+      src/App.tsx       — kanban board: 5 columns, cards, move/add/delete/view
+      package.json      — packageAliases wiring
   package.json          — perry-react package manifest
 ```
 
@@ -96,9 +101,10 @@ Key helpers in `codegen.rs`:
 
 ---
 
-## The four Perry compiler fixes
+## The Perry compiler fixes
 
-All changes are in `perry/crates/perry-codegen/src/codegen.rs`.
+Fixes 1–5 are in `perry/crates/perry-codegen/src/codegen.rs`.
+Fix 6 is in `perry/crates/perry-codegen/src/expr.rs`.
 
 ### Fix 1 — `js_native_call_method` receiver (~line 28179)
 
@@ -182,6 +188,40 @@ render: (element: ReactElement) => {
 `element: ReactElement` is an I64 in Perry's ABI (it's a named struct type). `_buildWidget` expects `any` (F64). The dynamic closure call path for within-module calls does a raw bitcast I64→F64 for I64 arguments — producing a subnormal float. Without the explicit `: any` annotation, the first call to `_buildWidget` receives a subnormal, `typeof element` returns `"number"`, and the entire component tree is replaced with the float rendered as text.
 
 `const elemAny: any = element` triggers Fix 3 (the `is_union` branch of `Stmt::Let`), which NaN-boxes the I64 pointer with POINTER_TAG before storing it in the `any`-typed local. `_renderFn = () => elemAny` then captures the properly tagged F64, so re-renders in `_scheduleRerender` also work correctly.
+
+---
+
+### Fix 6 — Array method return values (expr.rs ~lines 3267, 3292, 3318, 3096, 3463, 3216)
+
+**Problem**: `ArrayMap`, `ArrayFilter`, `ArraySort`, `ArraySlice`, `ArrayFlat`, and `ArraySplice` all returned their result array pointer using a raw bitcast `builder.ins().bitcast(types::F64, MemFlags::new(), result)`. This produced subnormal floats without POINTER_TAG. When `.map()` results were used as JSX children (e.g. `{cards.map(c => <Card card={c} />)}`), the children array was classified as `typeof "number"` and rendered as `0.000...` text.
+
+**Fix**: Changed all six return sites to `inline_nanbox_pointer(builder, result)`, consistent with Fix 5 for `Expr::Array`.
+
+**Note**: The old code comments said "consistent with Expr::Array which also uses bitcast" — but Fix 5 had already changed `Expr::Array` to use `inline_nanbox_pointer`. These methods needed the same update.
+
+---
+
+## perry-react: nested array children support
+
+**Problem**: When `.map()` results appear in JSX children (e.g. `jsxs("div", { children: [h3, mapResult, button] })`), `_appendChildren` iterates the outer array and calls `_buildWidget(mapResult)`. But `mapResult` is itself an array of ReactElements. `_buildWidget` doesn't handle arrays — it tries to read `.type` and returns null, silently dropping all mapped children.
+
+**Fix** (in `src/index.ts` `_appendChildren`): Changed the `Array.isArray` branch to call `_appendChildren(parent, children[i])` recursively instead of `_buildWidget(children[i])`. This correctly flattens nested arrays (from `.map()`, `.filter()`, etc.) into the parent widget.
+
+---
+
+## `.map()` index parameter limitation
+
+Perry's `js_array_map` callback may not reliably pass the index as the second argument. When using `.map((item, index) => ...)`, the `index` value may be garbage. **Workaround**: compute indices from data properties instead of relying on `.map()` index:
+```typescript
+// DON'T: rely on .map() index
+COL_NAMES.map((col, idx) => <Column colIdx={idx} />)
+
+// DO: compute index from data
+let colIdx = 0
+for (let i = 0; i < COL_NAMES.length; i++) {
+  if (COL_NAMES[i] === card.column) { colIdx = i }
+}
+```
 
 ---
 

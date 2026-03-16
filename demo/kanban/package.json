@@ -1,0 +1,14 @@
+{
+  "name": "perry-react-kanban",
+  "version": "0.1.0",
+  "description": "Kanban board demo using React syntax compiled to native via Perry",
+  "main": "src/main.tsx",
+  "perry": {
+    "packageAliases": {
+      "react":             "perry-react",
+      "react/jsx-runtime": "perry-react",
+      "react-dom":         "perry-react",
+      "react-dom/client":  "perry-react"
+    }
+  }
+}

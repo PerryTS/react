@@ -130,8 +130,8 @@ function _appendChildren(parent: any, children: any): void {
   }
   if (Array.isArray(children)) {
     for (let i = 0; i < children.length; i++) {
-      const w = _buildWidget(children[i])
-      if (w !== null) { widgetAddChild(parent, w) }
+      // Recursively handle nested arrays (e.g. .map() results in JSX children)
+      _appendChildren(parent, children[i])
     }
     return
   }
